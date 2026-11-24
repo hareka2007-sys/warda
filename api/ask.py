@@ -125,17 +125,34 @@ def gemini(model, key, system, contents):
         "contents": contents,
         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.4},
     }
-    url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent"
+    # لو جوجل زحمة (503) أو الموديل مش موجود، نجرب الموديل اللي بعده بدل ما نفشل.
+    chain = [model] + [m for m in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash") if m != model]
     started = time.time()
-    for attempt in range(3):
+    last = None
+    for m in chain:
+        left = 48 - (time.time() - started)
+        if left < 6:
+            break
         try:
-            return http_json(url, {"x-goog-api-key": key}, payload, timeout=28)
+            return http_json("https://generativelanguage.googleapis.com/v1beta/models/" + m + ":generateContent",
+                             {"x-goog-api-key": key}, payload, timeout=min(25, left))
         except urllib.error.HTTPError as e:
-            # جوجل أحيانًا بترجع 503 من الضغط. نعيد المحاولة بسرعة قبل ما نستسلم.
-            if e.code in (500, 502, 503, 504) and attempt < 2 and time.time() - started < 28:
-                time.sleep(1.5 * (attempt + 1))
+            if e.code in (404, 500, 502, 503, 504):
+                try:
+                    body = e.read().decode("utf-8", "replace")[:300]
+                except Exception:
+                    body = ""
+                print("gemini", m, "failed:", e.code, body)
+                last = e
                 continue
             raise
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            print("gemini", m, "network error:", repr(e))
+            last = e
+            continue
+    if last is not None:
+        raise last
+    raise urllib.error.URLError("no time left")
 
 
 class RateLimited(Exception):
