@@ -125,8 +125,17 @@ def gemini(model, key, system, contents):
         "contents": contents,
         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.4},
     }
-    return http_json("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent",
-                     {"x-goog-api-key": key}, payload, timeout=50)
+    url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent"
+    started = time.time()
+    for attempt in range(3):
+        try:
+            return http_json(url, {"x-goog-api-key": key}, payload, timeout=28)
+        except urllib.error.HTTPError as e:
+            # جوجل أحيانًا بترجع 503 من الضغط. نعيد المحاولة بسرعة قبل ما نستسلم.
+            if e.code in (500, 502, 503, 504) and attempt < 2 and time.time() - started < 28:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise
 
 
 class RateLimited(Exception):
