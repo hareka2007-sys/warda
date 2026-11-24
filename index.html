@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2b1f4d">
+<title>وردة (0)</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="vendor/katex.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" hidden>
+  <header class="top">
+    <img src="icons/icon-192.png" alt="" class="logo" width="44" height="44">
+    <div class="ttl"><h1>وردة (0)</h1><small>جامعة حورس · هندسة الحاسبات والنظم · ليفل زيرو</small></div>
+    <button class="icon-btn" id="themeBtn" aria-label="تغيير الوضع">◐</button>
+  </header>
+  <main id="views">
+    <section id="v-chat" class="view">
+      <div class="scroll" id="chatScroll">
+        <div class="banner"><span>🌹 جملة اليوم</span><p id="daily"></p><p id="todayPlan" class="plan-line" hidden></p></div>
+        <div id="chatLog"></div>
+      </div>
+      <div class="composer-wrap">
+        <div class="chips" id="quick"></div>
+        <div id="pending" class="pending" hidden></div>
+        <form class="composer" id="chatForm">
+          <label class="attach" title="رفع محاضرة">📎<input type="file" id="fileIn" multiple accept="application/pdf,image/*,.txt,.md" hidden></label>
+          <textarea id="chatIn" rows="1" placeholder="اكتب سؤالك أو ارفع محاضرة…" maxlength="2000"></textarea>
+          <button class="send" id="sendBtn" type="submit" aria-label="إرسال">↑</button>
+        </form>
+      </div>
+    </section>
+    <section id="v-quiz" class="view" hidden><div class="scroll" id="quizBox"></div></section>
+    <section id="v-plan" class="view" hidden><div class="scroll" id="planBox"></div></section>
+    <section id="v-tools" class="view" hidden><div class="scroll" id="toolsBox"></div></section>
+    <section id="v-key" class="view" hidden><div class="scroll" id="keyBox"></div></section>
+  </main>
+  <nav class="tabs" id="tabs">
+    <button data-v="chat" class="on"><b>◉</b>الشات</button>
+    <button data-v="quiz"><b>✎</b>اختبار</button>
+    <button data-v="plan"><b>▦</b>خطة</button>
+    <button data-v="tools"><b>%</b>أدوات</button>
+    <button data-v="key"><b>⚙</b>المفتاح</button>
+  </nav>
+</div>
+
+<div id="auth" class="auth" hidden>
+  <form id="authForm" class="auth-card">
+    <img src="icons/icon-192.png" alt="" width="84" height="84" class="logo big">
+    <h2>وردة (0)</h2>
+    <p class="sub">أهلا أنا وردة 🌹 سجّل دخول عشان نبدأ.</p>
+    <input id="aName" type="text" placeholder="اسمك (للتسجيل الجديد)" autocomplete="name" hidden>
+    <input id="aEmail" type="email" placeholder="الإيميل" autocomplete="email" required>
+    <input id="aPass" type="password" placeholder="كلمة السر (8 حروف على الأقل)" autocomplete="current-password" minlength="8" required>
+    <button class="btn" id="aGo" type="submit">دخول</button>
+    <div class="auth-links"><a href="#" id="aToggle">معنديش حساب</a><a href="#" id="aForgot">نسيت كلمة السر</a></div>
+    <p class="msg" id="aMsg" role="alert"></p>
+  </form>
+</div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="vendor/katex.min.js"></script>
+<script src="vendor/auto-render.min.js"></script>
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
