@@ -664,6 +664,7 @@ function setupAuth() {
 
 /* ---------- تشغيل ---------- */
 function init() {
+  syncSession(); S.chat = []; S.curId = null; save('chat', 'curId'); // كل فتحة للتطبيق = محادثة جديدة، والقديمة محفوظة في السجل
   $('#daily').textContent = '«' + QUOTES[dayOfYear(new Date()) % QUOTES.length] + '»';
   renderQuick();
   $('#tabs').onclick = e => { const b = e.target.closest('button'); if (b) go(b.dataset.v); };
