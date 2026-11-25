@@ -1,5 +1,5 @@
 // خدمة تخزين ملفات الواجهة فقط. الـAPI والدخول دايمًا من السيرفر.
-const VERSION = 'warda-v7';
+const VERSION = 'warda-v8';
 const SHELL = ['/', '/index.html', '/style.css', '/app.js', '/data.js', '/config.js', '/offline.html', '/manifest.webmanifest',
   '/vendor/katex.min.css', '/vendor/katex.min.js', '/vendor/auto-render.min.js', '/vendor/pdf.min.js', '/vendor/supabase.js', '/icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });

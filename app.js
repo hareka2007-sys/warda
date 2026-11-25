@@ -379,7 +379,8 @@ function renderExplain(box, ex, lec, all) {
     const c = el('div', 'row-btns'); const q = el('button', 'chip p', 'اعمل اختبار من المحاضرة'); q.onclick = () => { go('quiz'); startQuiz(lec.id); };
     const cp = el('button', 'chip', 'نسخ الملخص'); cp.onclick = () => copyText(ex.summary);
     const sv = el('button', 'chip', 'حفظ الملخص في ملاحظاتي'); sv.onclick = () => addNote((ex.title || lec.name) + ': ' + ex.summary);
-    c.append(q, cp, sv); f.append(c); return f;
+    const pd = el('button', 'chip', 'تصدير PDF'); pd.onclick = () => summaryPdf(ex, lec);
+    c.append(q, cp, sv, pd); f.append(c); return f;
   }
   function stepEl(i) {
     const s = ex.steps[i]; const d = el('div', 'step');
@@ -420,6 +421,107 @@ function renderExplain(box, ex, lec, all) {
     return d;
   }
   if (all) { for (let i = 0; i < N; i++) { steps.append(stepEl(i)); shown++; } tail.append(finish()); } else showNext();
+}
+
+
+/* ---------- تصدير PDF (طباعة المتصفح، حفظ كـ PDF) ---------- */
+function exportPdf(title, bodyHtml) {
+  let a = $('#printArea'); if (!a) { a = el('div'); a.id = 'printArea'; document.body.append(a); }
+  a.innerHTML = '<h1>' + esc(title) + '</h1><div class="pdf-sub">وردة (0) · ' + esc(new Date().toLocaleDateString('ar-EG')) + '</div>' + bodyHtml;
+  const old = document.title; document.title = String(title).replace(/[\\\/:*?"<>|]/g, ' ').slice(0, 60) || 'warda';
+  const done = () => { document.body.classList.remove('printing'); document.title = old; window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done); document.body.classList.add('printing');
+  toast('اختار "حفظ كـ PDF" من شاشة الطباعة');
+  setTimeout(() => { try { window.print(); } catch (e) { done(); } }, 350);
+}
+function summaryPdf(ex, lec) {
+  let h = '<h2>الملخص</h2>' + md(ex.summary);
+  if (ex.key_terms && ex.key_terms.length) h += '<h2>المصطلحات</h2><ul>' + ex.key_terms.map(t => '<li><span class="en">' + esc(t.en) + '</span>: ' + esc(t.ar) + '</li>').join('') + '</ul>';
+  h += '<h2>الشرح خطوة بخطوة</h2>' + ex.steps.map((s, i) => '<div class="pdf-step"><h3>' + (i + 1) + '. ' + esc(s.title) + '</h3>' + md(s.body) + eqHtml(s.equation) + '</div>').join('');
+  exportPdf(ex.title || lec.name, h);
+}
+function quizPdf(qs, title, score) {
+  const L = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
+  let h = score != null ? '<div class="pdf-sub">النتيجة: ' + score + ' / ' + qs.length + '</div>' : '';
+  h += qs.map((q, i) => '<div class="pdf-q"><h3>' + (i + 1) + '. ' + inline(q.q, []) + '</h3><ol class="pdf-opts">' + q.options.map((o, k) => '<li' + (k === q.answer ? ' class="pdf-ok"' : '') + '>' + L[k] + ') ' + inline(o, []) + (k === q.answer ? ' ✓' : '') + '</li>').join('') + '</ol><div class="pdf-why">' + md(q.explanation || '') + '</div></div>').join('');
+  exportPdf('اختبار: ' + title, h);
+}
+
+/* ---------- مؤقت بومودورو ---------- */
+const POMO = { work: 25, short: 5, long: 15 };
+const pomo = { mode: 'work', left: POMO.work * 60, end: 0, run: false, count: LS.get('pomoDay', { d: '', n: 0 }), tick: null, ui: null };
+function pomoToday() { const t = ymd(new Date()); if (pomo.count.d !== t) pomo.count = { d: t, n: 0 }; return pomo.count; }
+function pomoBeep() { try { const C = window.AudioContext || window.webkitAudioContext; const c = new C(); [0, 0.25, 0.5].forEach(t => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(c.destination); o.start(c.currentTime + t); o.stop(c.currentTime + t + 0.15); }); } catch (e) {} if (navigator.vibrate) navigator.vibrate([200, 100, 200]); }
+function pomoNext() {
+  if (pomo.mode === 'work') { const c = pomoToday(); c.n++; LS.set('pomoDay', c); pomo.mode = c.n % 4 === 0 ? 'long' : 'short'; toast('خلّصت جلسة تركيز 🎉 خد راحة'); }
+  else { pomo.mode = 'work'; toast('الراحة خلصت. يلا نركّز'); }
+  pomo.left = POMO[pomo.mode] * 60; pomo.run = false; pomo.end = 0; pomoBeep();
+}
+function pomoStep() {
+  if (pomo.run) { pomo.left = Math.max(0, Math.round((pomo.end - Date.now()) / 1000)); if (pomo.left <= 0) { pomoNext(); } }
+  pomoPaint();
+}
+function pomoPaint() {
+  if (!pomo.ui || !pomo.ui.box.isConnected) return;
+  const m = String(Math.floor(pomo.left / 60)).padStart(2, '0'), s = String(pomo.left % 60).padStart(2, '0');
+  const u = pomo.ui; u.time.textContent = m + ':' + s;
+  u.mode.textContent = pomo.mode === 'work' ? 'وقت التركيز' : pomo.mode === 'short' ? 'راحة قصيرة' : 'راحة طويلة';
+  u.go.textContent = pomo.run ? 'إيقاف مؤقت' : 'ابدأ';
+  u.cnt.textContent = 'جلسات النهارده: ' + pomoToday().n;
+  u.bar.style.width = Math.round(100 * (1 - pomo.left / (POMO[pomo.mode] * 60))) + '%';
+  u.box.className = 'card pomo ' + pomo.mode;
+}
+function pomoCard() {
+  const c = el('div', 'card pomo'); c.innerHTML = '<h3>⏱ مؤقت التركيز (بومودورو)</h3><div class="pomo-mode"></div><div class="pomo-time">25:00</div><div class="bar"><i></i></div><div class="muted pomo-cnt"></div>';
+  const row = el('div', 'row-btns');
+  const go1 = el('button', 'chip p', 'ابدأ'); go1.type = 'button';
+  const rs = el('button', 'chip', 'من الأول'); rs.type = 'button';
+  const sk = el('button', 'chip', 'تخطّي'); sk.type = 'button';
+  go1.onclick = () => { if (pomo.run) { pomo.run = false; pomo.left = Math.max(0, Math.round((pomo.end - Date.now()) / 1000)); } else { pomo.run = true; pomo.end = Date.now() + pomo.left * 1000; } pomoPaint(); };
+  rs.onclick = () => { pomo.run = false; pomo.left = POMO[pomo.mode] * 60; pomoPaint(); };
+  sk.onclick = () => { pomo.mode = pomo.mode === 'work' ? 'short' : 'work'; pomo.run = false; pomo.left = POMO[pomo.mode] * 60; pomoPaint(); };
+  row.append(go1, rs, sk); c.append(row);
+  pomo.ui = { box: c, time: $('.pomo-time', c), mode: $('.pomo-mode', c), go: go1, cnt: $('.pomo-cnt', c), bar: $('.bar i', c) };
+  if (!pomo.tick) pomo.tick = setInterval(pomoStep, 500);
+  pomoPaint(); return c;
+}
+
+/* ---------- تحليل نقاط الضعف ---------- */
+function weakCard() {
+  const c = el('div', 'card weak'); c.innerHTML = '<h3>📊 نقاط الضعف</h3>';
+  const items = [];
+  Object.keys(S.stats).forEach(n => { const s = S.stats[n]; if (s.a >= 3) { const p = Math.round(100 * s.c / s.a); if (p < 70) items.push({ name: n, p, a: s.a, w: S.wrongs.filter(x => x.lecture === n).length }); } });
+  items.sort((x, y) => x.p - y.p);
+  if (!items.length && !S.wrongs.length) { c.append(el('div', 'muted', 'لسه مفيش بيانات كفاية. بعد ما تحل كام سؤال هطلعلك المحاضرات اللي محتاجة تراجعها.')); return c; }
+  if (!items.length) c.append(el('div', 'muted', 'مفيش محاضرة نسبتها تحت 70% لحد دلوقتي. كمّل.'));
+  items.slice(0, 4).forEach(x => {
+    const lec = S.lectures.find(l => l.name === x.name);
+    const d = el('div', 'weak-item'); d.innerHTML = '<div class="row"><span>' + esc(x.name) + '</span><b class="' + (x.p < 50 ? 'bad' : 'mid') + '">' + x.p + '%</b></div><div class="bar"><i style="width:' + x.p + '%"></i></div><div class="muted">' + x.a + ' سؤال' + (x.w ? ' · ' + x.w + ' غلط محفوظ' : '') + '</div>';
+    if (lec) { const b = el('button', 'chip p', 'اتختبر في ' + (x.p < 50 ? 'الأساسيات' : 'المحاضرة')); b.type = 'button'; b.onclick = () => startQuiz(lec.id, 8); const r = el('div', 'row-btns'); r.append(b); d.append(r); }
+    c.append(d);
+  });
+  const by = {}; S.wrongs.forEach(w => { const k = w.lecture || 'غير محدد'; by[k] = (by[k] || 0) + w.count; });
+  const top = Object.keys(by).sort((x, y) => by[y] - by[x])[0];
+  if (top) c.append(el('div', 'note', '<b>أكتر مكان بتغلط فيه:</b> ' + esc(top) + ' (' + by[top] + ' غلطة)'));
+  if (S.confused.length) c.append(el('div', 'muted', 'ومعاك ' + S.confused.length + ' حاجة ضغطت عليها «مفهمتش».'));
+  return c;
+}
+
+/* ---------- الميكروفون ---------- */
+function setupMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const btn = $('#micBtn'); if (!btn) return;
+  if (!SR) { btn.hidden = true; return; }
+  const input = $('#chatIn'); let rec = null, on = false, base = '';
+  const stop = () => { on = false; btn.classList.remove('rec'); btn.setAttribute('aria-pressed', 'false'); try { rec && rec.stop(); } catch (e) {} };
+  btn.onclick = () => {
+    if (on) { stop(); return; }
+    rec = new SR(); rec.lang = 'ar-EG'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    base = input.value ? input.value.trim() + ' ' : '';
+    rec.onresult = e => { let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript; input.value = (base + t).slice(0, 2000); input.dispatchEvent(new Event('input')); };
+    rec.onerror = e => { stop(); const er = e.error; toast(er === 'not-allowed' || er === 'service-not-allowed' ? 'اسمح للميكروفون من إعدادات المتصفح' : er === 'no-speech' ? 'مسمعتش حاجة. جرّب تاني' : er === 'network' ? 'محتاج نت عشان الصوت' : 'الميكروفون مش شغال دلوقتي'); };
+    rec.onend = () => { stop(); input.focus(); };
+    try { rec.start(); on = true; btn.classList.add('rec'); btn.setAttribute('aria-pressed', 'true'); toast('اتكلم دلوقتي…'); } catch (e) { stop(); }
+  };
 }
 
 /* ---------- ملاحظات + إحصائيات + أسئلة غلط ---------- */
@@ -465,7 +567,7 @@ function renderQuizHome() {
   const c3 = el('div', 'card'); c3.innerHTML = '<h3>مستواك</h3>'; const names = Object.keys(S.stats);
   if (!names.length) c3.append(el('div', 'muted', 'بعد أول أسئلة هتشوف نسبة الصح لكل محاضرة.'));
   names.forEach(n => { const s = S.stats[n], p = Math.round(100 * s.c / s.a); const r = el('div', null, '<div class="row"><span>' + esc(n) + '</span><b>' + p + '% (' + s.c + '/' + s.a + ')</b></div><div class="bar"><i style="width:' + p + '%"></i></div>'); c3.append(r); });
-  box.append(c1, c2, cf, c3);
+  box.append(c1, weakCard(), c2, cf, c3);
 }
 async function startQuiz(lecId, count) {
   const l = lectureById(lecId); if (!l) { toast('اختار محاضرة'); return; }
@@ -487,6 +589,7 @@ function runQuiz() {
   if (quiz.i >= quiz.qs.length) {
     const pct = Math.round(100 * quiz.score / quiz.qs.length);
     const c = el('div', 'card', '<h3>خلّصت! ' + (pct >= 80 ? '🎉' : pct >= 60 ? '👍' : '💪') + '</h3><div class="grade"><b>' + quiz.score + ' / ' + quiz.qs.length + '</b><br><small>' + pct + '%</small></div><div class="muted" style="margin-top:8px">' + (pct >= 60 ? 'كويس. الأسئلة الغلط اتحفظت وهترجعلك.' : 'مش مشكلة. راجع الأسئلة الغلط وجرّب تاني.') + '</div>');
+    const pq = el('button', 'btn sec', 'تصدير الأسئلة PDF'); pq.style.marginTop = '10px'; const qq = quiz; pq.onclick = () => quizPdf(qq.qs, qq.title, qq.score); c.append(pq);
     const b = el('button', 'btn', 'رجوع'); b.style.marginTop = '10px'; b.onclick = () => { quiz = null; renderQuizHome(); }; c.append(b); box.append(c); return;
   }
   const q = quiz.qs[quiz.i]; const c = el('div', 'card');
@@ -518,7 +621,7 @@ function renderPlan() {
   const b = el('button', 'btn', 'اعمل الخطة'); b.style.marginTop = '10px';
   const out = el('div');
   b.onclick = () => { S.plan = { name: $('#pName').value.trim(), exam: $('#pExam').value, lectures: +$('#pLec').value, hours: +$('#pHrs').value, rest: $('#pRest').value, done: (S.plan && S.plan.done) || {} }; save('plan'); showPlan(out); renderTodayPlan(); };
-  c.append(b); box.append(c, out); if (S.plan) showPlan(out);
+  c.append(b); box.append(pomoCard(), c, out); if (S.plan) showPlan(out);
 }
 function showPlan(out) {
   out.innerHTML = ''; const r = buildPlan(S.plan);
@@ -666,7 +769,7 @@ function setupAuth() {
 function init() {
   syncSession(); S.chat = []; S.curId = null; save('chat', 'curId'); // كل فتحة للتطبيق = محادثة جديدة، والقديمة محفوظة في السجل
   $('#daily').textContent = '«' + QUOTES[dayOfYear(new Date()) % QUOTES.length] + '»';
-  renderQuick();
+  renderQuick(); setupMic();
   $('#tabs').onclick = e => { const b = e.target.closest('button'); if (b) go(b.dataset.v); };
   $('#themeBtn').onclick = () => { S.theme = S.theme === 'dark' ? 'mix' : 'dark'; save('theme'); applyTheme(); };
   const input = $('#chatIn'); const grow = () => { input.style.height = 'auto'; input.style.height = Math.min(120, input.scrollHeight) + 'px'; };
