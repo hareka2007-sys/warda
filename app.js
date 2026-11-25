@@ -527,8 +527,20 @@ function setupMic() {
   if (!SR) { btn.hidden = true; return; }
   const input = $('#chatIn'); let rec = null, on = false, base = '';
   const stop = () => { on = false; btn.classList.remove('rec'); btn.setAttribute('aria-pressed', 'false'); try { rec && rec.stop(); } catch (e) {} };
+  let asking = false;
   btn.onclick = () => {
     if (on) { stop(); return; }
+    if (asking) return;
+    const md = navigator.mediaDevices;
+    if (md && typeof md.getUserMedia === 'function') {
+      asking = true;
+      let p;
+      try { p = md.getUserMedia({ audio: true }); } catch (e) { p = Promise.reject(e); }
+      p.then(st => { try { st.getTracks().forEach(t => t.stop()); } catch (e) {} asking = false; startRec(); })
+        .catch(err => { asking = false; const n = err && err.name; if (n === 'NotAllowedError' || n === 'PermissionDeniedError') showMicHelp(); else startRec(); });
+    } else startRec();
+  };
+  const startRec = () => {
     rec = new SR(); rec.lang = 'ar-EG'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
     base = input.value ? input.value.trim() + ' ' : '';
     rec.onresult = e => { let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript; input.value = (base + t).slice(0, 2000); input.dispatchEvent(new Event('input')); };
