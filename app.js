@@ -515,7 +515,7 @@ function showMicHelp() {
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   const card = document.createElement('div');
   card.style.cssText = 'background:var(--card,#fff);color:var(--text,#111);border-radius:16px;padding:18px;max-width:340px;width:100%;direction:rtl;text-align:right;line-height:1.9;font-size:15px;max-height:85vh;overflow:auto;';
-  card.innerHTML = '<b>الميكروفون مقفول من المتصفح 🔒</b><br>عشان تشغّله، اعمل الآتي:<br><br><b>لو فاتح الموقع من كروم:</b><br>1) دوس على علامة القفل اللي جنب اسم الموقع فوق.<br>2) اختار «الأذونات».<br>3) عند «الميكروفون» اختار «سماح».<br>4) اعمل تحديث للصفحة، وجرب الميكروفون تاني.<br><br><b>لو الموقع متسطب كتطبيق على موبايلك:</b><br>1) دوس مطولاً على أيقونة التطبيق.<br>2) اختار «معلومات التطبيق».<br>3) «الأذونات» ثم «الميكروفون».<br>4) اختار «سماح»، وارجع افتح التطبيق.';
+  card.innerHTML = '<b>الميكروفون مقفول من المتصفح 🔒</b><br>عشان تشغّله، اعمل الآتي:<br><br>1) افتح متصفح كروم نفسه (مش أيقونة وردة).<br>2) دوس على النقط التلاتة، بعدين «الإعدادات»، بعدين «إعدادات الموقع»، بعدين «الميكروفون».<br>3) دوّر على warda-mauve.vercel.app واختار «سماح».<br>4) ارجع لوردة، اقفلها خالص وافتحها تاني، وجرب الميكروفون.';
   const b = document.createElement('button');
   b.className = 'btn'; b.type = 'button'; b.textContent = 'تمام، فهمت';
   b.style.marginTop = '12px'; b.style.width = '100%';
