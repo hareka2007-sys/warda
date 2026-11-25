@@ -508,24 +508,7 @@ function weakCard() {
 }
 
 /* ---------- الميكروفون ---------- */
-function showMicHelp(diag) {
-  if (document.getElementById('micHelp')) return;
-  const ov = document.createElement('div');
-  ov.id = 'micHelp';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
-  const card = document.createElement('div');
-  card.style.cssText = 'background:var(--card,#fff);color:var(--text,#111);border-radius:16px;padding:18px;max-width:340px;width:100%;direction:rtl;text-align:right;line-height:1.9;font-size:15px;max-height:85vh;overflow:auto;';
-  card.innerHTML = '<b>الميكروفون مقفول من المتصفح 🔒</b><br>عشان تشغّله، اعمل الآتي:<br><br>1) افتح متصفح كروم نفسه (مش أيقونة وردة).<br>2) دوس على النقط التلاتة، بعدين «الإعدادات»، بعدين «إعدادات الموقع»، بعدين «الميكروفون».<br>3) دوّر على warda-mauve.vercel.app واختار «سماح».<br>4) ارجع لوردة، اقفلها خالص وافتحها تاني، وجرب الميكروفون.';
-  const b = document.createElement('button');
-  b.className = 'btn'; b.type = 'button'; b.textContent = 'تمام، فهمت';
-  b.style.marginTop = '12px'; b.style.width = '100%';
-  b.onclick = () => ov.remove();
-  const d = document.createElement('div');
-  let sa = false; try { sa = !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; } catch (e) {}
-  d.style.cssText = 'direction:ltr;text-align:left;font-size:11px;color:#888;margin-top:10px;line-height:1.4;word-break:break-all;';
-  d.textContent = 'كود الخطأ: ' + String(diag || 'unknown') + ' / secure=' + window.isSecureContext + ' / standalone=' + sa;
-  card.append(b); card.append(d); ov.append(card); document.body.append(ov);
-}
+function showMicHelp() {}
 function setupMic() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const btn = $('#micBtn'); if (!btn) return;
   if (!SR) { btn.hidden = true; return; }
