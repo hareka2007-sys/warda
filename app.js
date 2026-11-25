@@ -19,18 +19,24 @@ const S = {
   chat: LS.get('chat', []), lectures: LS.get('lectures', []), lecText: LS.get('lectext', {}),
   wrongs: LS.get('wrongs', []), notes: LS.get('notes', []), plan: LS.get('plan', null), stats: LS.get('stats', {}),
   gpaRows: LS.get('gpa', [{ name: 'Math 1', h: 3, g: 'A-' }, { name: 'Physics 1', h: 3, g: 'B+' }]),
-  active: LS.get('active', null), theme: LS.get('theme', 'mix'), fb: LS.get('fb', {}), updated: LS.get('updated', 0)
+  active: LS.get('active', null), sessions: LS.get('sessions', []), confused: LS.get('confused', []), curId: LS.get('curId', null), theme: LS.get('theme', 'mix'), fb: LS.get('fb', {}), updated: LS.get('updated', 0)
 };
-const SYNCED = ['wrongs', 'notes', 'plan', 'stats', 'gpaRows'];
+const SYNCED = ['wrongs', 'notes', 'plan', 'stats', 'gpaRows', 'sessions', 'confused'];
 let sb = null, session = null, pushTimer = null;
 function save(...keys) {
   keys.forEach(k => {
-    const map = { chat: 'chat', lectures: 'lectures', lecText: 'lectext', wrongs: 'wrongs', notes: 'notes', plan: 'plan', stats: 'stats', gpaRows: 'gpa', active: 'active', theme: 'theme', fb: 'fb' };
+    const map = { chat: 'chat', lectures: 'lectures', lecText: 'lectext', wrongs: 'wrongs', notes: 'notes', plan: 'plan', stats: 'stats', gpaRows: 'gpa', active: 'active', theme: 'theme', fb: 'fb', sessions: 'sessions', confused: 'confused', curId: 'curid' };
     let ok = LS.set(map[k], S[k]);
+    if (!ok && k === 'sessions') { while (!ok && S.sessions.length > 1) { S.sessions.pop(); ok = LS.set('sessions', S.sessions); } }
     if (!ok && k === 'chat') { S.chat = S.chat.slice(-10); LS.set('chat', S.chat); }
     if (!ok && k === 'lecText') toast('مساحة التخزين امتلت. امسح محاضرات قديمة من الأدوات.');
   });
   if (keys.some(k => SYNCED.includes(k))) { S.updated = Date.now(); LS.set('updated', S.updated); schedulePush(); }
+}
+function mergeSessions(a, b) {
+  const m = new Map();
+  (a || []).concat(b || []).forEach(r => { if (!r || !r.id) return; const o = m.get(r.id); if (!o || r.ts > o.ts) m.set(r.id, r); });
+  return Array.from(m.values()).sort((x, y) => (y.pin ? 1 : 0) - (x.pin ? 1 : 0) || y.ts - x.ts).slice(0, 30);
 }
 function schedulePush() {
   if (!sb || !session) return;
@@ -46,8 +52,10 @@ async function pullData() {
   if (!sb || !session) return;
   try {
     const { data } = await sb.from('user_data').select('data,updated_at').eq('user_id', session.user.id).maybeSingle();
+    if (data && data.data && Array.isArray(data.data.sessions)) { S.sessions = mergeSessions(S.sessions, data.data.sessions); LS.set('sessions', S.sessions); }
+    if (data && data.data && Array.isArray(data.data.confused)) { const m = new Map(); S.confused.concat(data.data.confused).forEach(r => { if (r && r.id && !m.has(r.id)) m.set(r.id, r); }); S.confused = Array.from(m.values()).sort((a, b) => b.ts - a.ts).slice(0, 30); LS.set('confused', S.confused); }
     if (data && data.data && new Date(data.updated_at).getTime() > S.updated) {
-      SYNCED.forEach(k => { if (data.data[k] !== undefined) S[k] = data.data[k]; });
+      SYNCED.forEach(k => { if (k !== 'sessions' && k !== 'confused' && data.data[k] !== undefined) S[k] = data.data[k]; });
       save('wrongs', 'notes', 'plan', 'stats', 'gpaRows'); S.updated = new Date(data.updated_at).getTime(); LS.set('updated', S.updated);
       renderAll();
     }
@@ -219,7 +227,53 @@ function setActive(id) { S.active = id; save('active'); renderPending(); }
 /* ---------- الشات ---------- */
 let pendingFiles = [], busy = false;
 const chatLog = () => $('#chatLog');
-function pushChat(m) { S.chat.push(m); S.chat = S.chat.slice(-40); save('chat'); }
+function pushChat(m) { S.chat.push(m); S.chat = S.chat.slice(-40); save('chat'); syncSession(); }
+/* ---------- سجل المحادثات ---------- */
+function chatTitle(c) { const f = c.find(m => m.role === 'u' && m.text); return f ? f.text.replace(/\s+/g, ' ').slice(0, 45) : 'محادثة جديدة'; }
+function syncSession() {
+  if (!S.chat.length) return;
+  if (!S.curId) S.curId = uid();
+  const i = S.sessions.findIndex(x => x.id === S.curId);
+  const rec = { id: S.curId, title: chatTitle(S.chat), ts: Date.now(), chat: S.chat, pin: i >= 0 && S.sessions[i].pin ? 1 : 0 };
+  if (i >= 0) S.sessions.splice(i, 1);
+  S.sessions.unshift(rec); S.sessions = mergeSessions(S.sessions, []);
+  save('sessions', 'curId');
+}
+function newChat() { syncSession(); S.chat = []; S.curId = null; save('chat', 'curId'); renderChat(); closeHistory(); }
+function openSession(id) {
+  const r = S.sessions.find(x => x.id === id); if (!r) return;
+  syncSession(); S.chat = r.chat.slice(); S.curId = r.id; save('chat', 'curId'); renderChat(); closeHistory();
+}
+function closeHistory() { const o = $('#histBox'); if (o) o.remove(); }
+function sessionText(r) { return (r.title + ' ' + r.chat.map(m => m.text || (m.ex && m.ex.summary) || '').join(' ')).toLowerCase(); }
+function showHistory(filter) {
+  const keep = $('#histQ') ? $('#histQ').value : (filter || '');
+  closeHistory(); syncSession();
+  const o = el('div', 'hist'); o.id = 'histBox';
+  const card = el('div', 'hist-card'); o.append(card);
+  const h = el('div', 'hist-h', '<b>سجل المحادثات</b>'); const x = el('button', 'chip', 'إغلاق'); x.type = 'button'; x.onclick = closeHistory; h.append(x); card.append(h);
+  const nb = el('button', 'chip p', '＋ محادثة جديدة'); nb.type = 'button'; nb.onclick = newChat; card.append(nb);
+  const q = el('input'); q.id = 'histQ'; q.type = 'search'; q.placeholder = 'دوّر في المحادثات…'; q.value = keep; card.append(q);
+  const list = el('div', 'hist-list'); card.append(list);
+  const draw = () => {
+    list.innerHTML = ''; const k = q.value.trim().toLowerCase();
+    const rows = S.sessions.filter(r => !k || sessionText(r).includes(k));
+    if (!rows.length) list.append(el('p', 'muted', k ? 'مفيش محادثة فيها الكلمة دي.' : 'مفيش محادثات محفوظة لسه.'));
+    rows.forEach(r => {
+      const row = el('div', 'hist-row' + (r.id === S.curId ? ' cur' : ''));
+      const t = el('button', 'hist-t', '<span>' + (r.pin ? '📌 ' : '') + esc(r.title) + '</span><small>' + esc(new Date(r.ts).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })) + ' · ' + r.chat.length + ' رسالة</small>');
+      t.type = 'button'; t.onclick = () => openSession(r.id);
+      const pn = el('button', 'chip' + (r.pin ? ' on' : ''), r.pin ? 'شيل التثبيت' : 'ثبّت'); pn.type = 'button';
+      pn.onclick = () => { r.pin = r.pin ? 0 : 1; S.sessions = mergeSessions(S.sessions, []); save('sessions'); showHistory(); };
+      const d = el('button', 'chip', 'حذف'); d.type = 'button';
+      d.onclick = () => { if (!confirm('تمسح المحادثة دي؟')) return; S.sessions = S.sessions.filter(y => y !== r); save('sessions'); if (r.id === S.curId) { S.chat = []; S.curId = null; save('chat', 'curId'); renderChat(); } showHistory(); };
+      row.append(t, pn, d); list.append(row);
+    });
+  };
+  q.oninput = draw; draw();
+  o.onclick = e => { if (e.target === o) closeHistory(); };
+  document.body.append(o);
+}
 function srcTag(s) { return s === 'hue' ? 'من بيانات حورس' : s === 'lecture' ? 'من محاضرتك' : s === 'general' ? 'معلومة عامة، راجع مصدرك' : ''; }
 function addUser(text) { const d = el('div', 'msg-u'); d.textContent = text; chatLog().append(d); scrollDown(); }
 function botBubble(m, idx) {
@@ -231,7 +285,9 @@ function botBubble(m, idx) {
   const setFb = v => { S.fb[m.id] = S.fb[m.id] === v ? 0 : v; save('fb'); ok.classList.toggle('on', S.fb[m.id] === 1); no.classList.toggle('on', S.fb[m.id] === -1); };
   ok.onclick = () => setFb(1); no.onclick = () => setFb(-1);
   const nt = el('button', 'chip', 'حفظ في ملاحظاتي'); nt.onclick = () => { addNote(plain(md(m.text))); };
-  c.append(cp, ok, no, nt); b.append(c); return b;
+  const ns = el('button', 'chip p', 'ما فهمتش'); ns.type = 'button';
+  ns.onclick = () => { S.confused.unshift({ id: m.id || uid(), text: plain(md(m.text)).slice(0, 700), ts: Date.now() }); S.confused = S.confused.filter((x, i, a) => a.findIndex(y => y.id === x.id) === i).slice(0, 30); save('confused'); askChat('ما فهمتش الشرح اللي فات. اشرحلي نفس الكلام ده بشكل أبسط وبمثال: «' + plain(md(m.text)).slice(0, 400) + '»'); };
+  c.append(cp, ok, no, nt, ns); b.append(c); return b;
 }
 function renderChat() {
   const log = chatLog(); log.innerHTML = '';
@@ -284,10 +340,29 @@ function renderPending() {
 }
 function renderQuick() {
   const q = $('#quick'); q.innerHTML = '';
-  [['حوّل نسبتي لتقدير', () => go('tools', 'conv')], ['إيه بيتفتح بعد Physics 1؟', () => askChat('إيه المواد اللي بتتفتح بعد ما أنجح في Physics 1؟')], ['احسب GPA', () => go('tools', 'gpa')], ['🗑 مسح الشات', clearChat]]
+  const A = t => () => askChat(t);
+  [['🕘 السجل', () => showHistory()], ['＋ محادثة جديدة', newChat],
+   ['حوّل نسبتي لتقدير', () => go('tools', 'conv')], ['احسب GPA', () => go('tools', 'gpa')],
+   ['إيه بيتفتح بعد Physics 1؟', A('إيه المواد اللي بتتفتح بعد ما أنجح في Physics 1؟')],
+   ['Physics 1 و 2', A('عرفني بمادتي Physics 1 و Physics 2: الساعات والمتطلب السابق.')],
+   ['Mathematics 1 و 2', A('عرفني بمادتي Mathematics 1 و Mathematics 2: الساعات والمتطلب السابق.')],
+   ['Mechanics 1 و 2', A('عرفني بمادتي Mechanics 1 و Mechanics 2: الساعات والمتطلب السابق.')],
+   ['Chemistry', A('عرفني بمادة Engineering Chemistry: الساعات وفي أي فصل.')],
+   ['Computer Skills', A('عرفني بمادة Computer Skills: الساعات وفي أي فصل.')],
+   ['Engineering Drawing', A('عرفني بمادة Engineering Drawing & Projection: الساعات وفي أي فصل.')],
+   ['English', A('عرفني بمادة English Language: الساعات وفي أي فصل.')],
+   ['History of Engineering', A('عرفني بمادة History of Engineering & Technology: الساعات وفي أي فصل.')],
+   ['Manufacturing', A('عرفني بمادة Principles of Manufacturing Engineering: الساعات وفي أي فصل.')],
+   ['Water & Energy', A('عرفني بمادة Water, Energy & Climate Change Issues: الساعات وفي أي فصل.')],
+   ['Human Rights', A('عرفني بمادة Human Rights: الساعات وفي أي فصل.')],
+   ['مواد الترم الأول', A('إيه مواد الفصل الأول في ليفل 0 وساعات كل مادة؟')],
+   ['مواد الترم التاني', A('إيه مواد الفصل التاني في ليفل 0 وساعات كل مادة؟')],
+   ['الحضور والغياب', A('إيه قواعد الحضور والغياب في اللائحة؟')],
+   ['النجاح والرسوب', A('إيه درجة النجاح في المادة، وإيه اللي بيحصل لو رسبت؟')],
+   ['حد أقصى للساعات', A('إيه الحد الأقصى للساعات اللي أقدر أسجلها في الترم؟')]]
     .forEach(([t, f]) => { const b = el('button', 'chip', esc(t)); b.type = 'button'; b.onclick = f; q.append(b); });
 }
-function clearChat() { if (!S.chat.length || confirm('تمسح كل المحادثة؟ المحاضرات والأسئلة الغلط هتفضل.')) { S.chat = []; save('chat'); renderChat(); } }
+function clearChat() { newChat(); }
 
 /* ---------- الشرح خطوة بخطوة ---------- */
 function renderExplain(box, ex, lec, all) {
@@ -380,16 +455,30 @@ function renderQuizHome() {
     c2.append(b1);
     const b2 = el('button', 'link', 'مسح كل الأسئلة الغلط'); b2.onclick = () => { if (confirm('تمسح كل الأسئلة الغلط؟')) { S.wrongs = []; save('wrongs'); renderQuizHome(); } }; c2.append(b2);
   }
+  const cf = el('div', 'card'); cf.innerHTML = '<h3>الحاجات اللي ما فهمتهاش (' + S.confused.length + ')</h3>';
+  if (!S.confused.length) cf.append(el('div', 'muted', 'أي رد في الشات تدوس عليه «ما فهمتش» بيتحفظ هنا، وتقدر تتختبر فيه.'));
+  else {
+    S.confused.slice(0, 4).forEach(x => { const r = el('div', 'row'); r.append(el('span', null, esc(x.text.slice(0, 80)))); cf.append(r); });
+    const bq = el('button', 'btn', 'اختبرني في اللي ما فهمتوش'); bq.style.marginTop = '8px'; bq.onclick = () => startConfusedQuiz(); cf.append(bq);
+    const bc = el('button', 'link', 'مسح القائمة'); bc.onclick = () => { if (confirm('تمسح القائمة؟')) { S.confused = []; save('confused'); renderQuizHome(); } }; cf.append(bc);
+  }
   const c3 = el('div', 'card'); c3.innerHTML = '<h3>مستواك</h3>'; const names = Object.keys(S.stats);
   if (!names.length) c3.append(el('div', 'muted', 'بعد أول أسئلة هتشوف نسبة الصح لكل محاضرة.'));
   names.forEach(n => { const s = S.stats[n], p = Math.round(100 * s.c / s.a); const r = el('div', null, '<div class="row"><span>' + esc(n) + '</span><b>' + p + '% (' + s.c + '/' + s.a + ')</b></div><div class="bar"><i style="width:' + p + '%"></i></div>'); c3.append(r); });
-  box.append(c1, c2, c3);
+  box.append(c1, c2, cf, c3);
 }
 async function startQuiz(lecId, count) {
   const l = lectureById(lecId); if (!l) { toast('اختار محاضرة'); return; }
   const box = $('#quizBox'); box.innerHTML = ''; const w = el('div', 'card', '<span class="typing"><i></i><i></i><i></i></span> بعمل الأسئلة…'); box.append(w);
   try { const r = await api(Object.assign({ mode: 'quiz', count: count || 8 }, lectureContext(lecId)));
     quiz = { qs: r.questions.map(q => Object.assign(q, { lecture: l.name })), i: 0, score: 0, title: l.name, review: false }; runQuiz();
+  } catch (e) { box.innerHTML = ''; box.append(el('div', 'card', '<div class="warn">' + esc(e.message) + '</div>')); const b = el('button', 'btn sec', 'رجوع'); b.onclick = () => { quiz = null; renderQuizHome(); }; box.append(b); }
+}
+async function startConfusedQuiz() {
+  const box = $('#quizBox'); box.innerHTML = ''; box.append(el('div', 'card', '<span class="typing"><i></i><i></i><i></i></span> بعمل الأسئلة…'));
+  const name = 'الحاجات اللي ما فهمتهاش';
+  try { const r = await api({ mode: 'quiz', count: 6, lecture_text: S.confused.slice(0, 12).map(x => x.text).join('\n\n'), lecture_name: name });
+    quiz = { qs: r.questions.map(q => Object.assign(q, { lecture: name })), i: 0, score: 0, title: name, review: false }; runQuiz();
   } catch (e) { box.innerHTML = ''; box.append(el('div', 'card', '<div class="warn">' + esc(e.message) + '</div>')); const b = el('button', 'btn sec', 'رجوع'); b.onclick = () => { quiz = null; renderQuizHome(); }; box.append(b); }
 }
 function startReview(list) { quiz = { qs: list.map(w => ({ q: w.q, options: w.options, answer: w.answer, explanation: w.explanation, lecture: w.lecture, wid: w.id })), i: 0, score: 0, title: 'مراجعة الأسئلة الغلط', review: true }; runQuiz(); }
@@ -467,7 +556,14 @@ function renderTools() {
       + (n.length ? '<div class="pre">' + n.reverse().map(x => chip(x)).join('<span class="arr">▶</span>') + '<span class="arr">▶</span>' + chip(code, 'p') + '</div>' : '<div class="muted">مفيش متطلب سابق.</div>') + (c.preNote ? '<div class="warn">' + esc(c.preNote) + '</div>' : '')
       + '<h4 style="margin-top:10px;color:var(--lilac)">نجاحك فيها بيفتح:</h4>' + (u.length ? '<div class="pre">' + u.map(x => chip(x)).join('') + '</div>' : '<div class="muted">مفيش مواد بتعتمد عليها في برنامج الحاسبات.</div>')
       + (c.approx ? '<div class="warn" style="margin-top:8px">بيانات ليفل 1 إلى 4 اتقرت من صورة صغيرة. راجع شجرة البرنامج الرسمية قبل ما تعتمد عليها في التسجيل.</div>' : ''); };
-  sel.onchange = show; show();
+  const showAll = () => { show(); const code = sel.value, c = courseByCode(code), nm = c.code + ' ' + c.name;
+    const r = el('div', 'row-btns'); r.style.marginTop = '10px';
+    const a1 = el('button', 'chip p', 'اسأل وردة عن المادة'); a1.type = 'button';
+    a1.onclick = () => { go('chat'); askChat('اشرحلي مادة ' + nm + ': الساعات والمتطلب السابق وإيه بتفتحلي وفي أي فصل.'); };
+    const a2 = el('button', 'chip', 'اختبرني فيها'); a2.type = 'button';
+    a2.onclick = () => { go('chat'); askChat('اسألني 5 أسئلة سريعة عن مادة ' + nm + ' (الساعات والمتطلب السابق وموقعها في الخطة) وصحّحلي بعد ما أجاوب.'); };
+    r.append(a1, a2); res.append(r); };
+  sel.onchange = showAll; showAll();
   // GPA
   const c3 = el('div', 'card'); c3.id = 't-gpa'; c3.innerHTML = '<h3>حاسبة GPA</h3>'; const rows = el('div'); const out = el('div');
   const gopt = g => HUE.grades.map(x => '<option dir="ltr"' + (x.sym === g ? ' selected' : '') + '>' + x.sym + '</option>').join('');
