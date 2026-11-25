@@ -508,7 +508,7 @@ function weakCard() {
 }
 
 /* ---------- الميكروفون ---------- */
-function showMicHelp() {
+function showMicHelp(diag) {
   if (document.getElementById('micHelp')) return;
   const ov = document.createElement('div');
   ov.id = 'micHelp';
@@ -520,7 +520,11 @@ function showMicHelp() {
   b.className = 'btn'; b.type = 'button'; b.textContent = 'تمام، فهمت';
   b.style.marginTop = '12px'; b.style.width = '100%';
   b.onclick = () => ov.remove();
-  card.append(b); ov.append(card); document.body.append(ov);
+  const d = document.createElement('div');
+  let sa = false; try { sa = !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true; } catch (e) {}
+  d.style.cssText = 'direction:ltr;text-align:left;font-size:11px;color:#888;margin-top:10px;line-height:1.4;word-break:break-all;';
+  d.textContent = 'كود الخطأ: ' + String(diag || 'unknown') + ' / secure=' + window.isSecureContext + ' / standalone=' + sa;
+  card.append(b); card.append(d); ov.append(card); document.body.append(ov);
 }
 function setupMic() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const btn = $('#micBtn'); if (!btn) return;
@@ -537,14 +541,14 @@ function setupMic() {
       let p;
       try { p = md.getUserMedia({ audio: true }); } catch (e) { p = Promise.reject(e); }
       p.then(st => { try { st.getTracks().forEach(t => t.stop()); } catch (e) {} asking = false; startRec(); })
-        .catch(err => { asking = false; const n = err && err.name; if (n === 'NotAllowedError' || n === 'PermissionDeniedError') showMicHelp(); else startRec(); });
+        .catch(err => { asking = false; const n = err && err.name; if (n === 'NotAllowedError' || n === 'PermissionDeniedError') showMicHelp('gUM ' + n + ' / ' + (err && err.message)); else startRec(); });
     } else startRec();
   };
   const startRec = () => {
     rec = new SR(); rec.lang = 'ar-EG'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
     base = input.value ? input.value.trim() + ' ' : '';
     rec.onresult = e => { let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript; input.value = (base + t).slice(0, 2000); input.dispatchEvent(new Event('input')); };
-    rec.onerror = e => { stop(); const er = e.error; if (er === 'not-allowed' || er === 'service-not-allowed') { showMicHelp(); } else toast(er === 'no-speech' ? 'مسمعتش حاجة. جرّب تاني' : er === 'network' ? 'محتاج نت عشان الصوت' : 'الميكروفون مش شغال دلوقتي'); };
+    rec.onerror = e => { stop(); const er = e.error; if (er === 'not-allowed' || er === 'service-not-allowed') { showMicHelp('rec ' + er + ' / ' + (e.message || '')); } else toast(er === 'no-speech' ? 'مسمعتش حاجة. جرّب تاني' : er === 'network' ? 'محتاج نت عشان الصوت' : 'الميكروفون مش شغال دلوقتي'); };
     rec.onend = () => { stop(); input.focus(); };
     try { rec.start(); on = true; btn.classList.add('rec'); btn.setAttribute('aria-pressed', 'true'); toast('اتكلم دلوقتي…'); } catch (e) { stop(); }
   };
