@@ -508,6 +508,20 @@ function weakCard() {
 }
 
 /* ---------- الميكروفون ---------- */
+function showMicHelp() {
+  if (document.getElementById('micHelp')) return;
+  const ov = document.createElement('div');
+  ov.id = 'micHelp';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  const card = document.createElement('div');
+  card.style.cssText = 'background:var(--card,#fff);color:var(--text,#111);border-radius:16px;padding:18px;max-width:340px;width:100%;direction:rtl;text-align:right;line-height:1.9;font-size:15px;max-height:85vh;overflow:auto;';
+  card.innerHTML = '<b>الميكروفون مقفول من المتصفح 🔒</b><br>عشان تشغّله، اعمل الآتي:<br><br><b>لو فاتح الموقع من كروم:</b><br>1) دوس على علامة القفل اللي جنب اسم الموقع فوق.<br>2) اختار «الأذونات».<br>3) عند «الميكروفون» اختار «سماح».<br>4) اعمل تحديث للصفحة، وجرب الميكروفون تاني.<br><br><b>لو الموقع متسطب كتطبيق على موبايلك:</b><br>1) دوس مطولاً على أيقونة التطبيق.<br>2) اختار «معلومات التطبيق».<br>3) «الأذونات» ثم «الميكروفون».<br>4) اختار «سماح»، وارجع افتح التطبيق.';
+  const b = document.createElement('button');
+  b.className = 'btn'; b.type = 'button'; b.textContent = 'تمام، فهمت';
+  b.style.marginTop = '12px'; b.style.width = '100%';
+  b.onclick = () => ov.remove();
+  card.append(b); ov.append(card); document.body.append(ov);
+}
 function setupMic() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const btn = $('#micBtn'); if (!btn) return;
   if (!SR) { btn.hidden = true; return; }
@@ -518,7 +532,7 @@ function setupMic() {
     rec = new SR(); rec.lang = 'ar-EG'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
     base = input.value ? input.value.trim() + ' ' : '';
     rec.onresult = e => { let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript; input.value = (base + t).slice(0, 2000); input.dispatchEvent(new Event('input')); };
-    rec.onerror = e => { stop(); const er = e.error; toast(er === 'not-allowed' || er === 'service-not-allowed' ? 'اسمح للميكروفون من إعدادات المتصفح' : er === 'no-speech' ? 'مسمعتش حاجة. جرّب تاني' : er === 'network' ? 'محتاج نت عشان الصوت' : 'الميكروفون مش شغال دلوقتي'); };
+    rec.onerror = e => { stop(); const er = e.error; if (er === 'not-allowed' || er === 'service-not-allowed') { showMicHelp(); } else toast(er === 'no-speech' ? 'مسمعتش حاجة. جرّب تاني' : er === 'network' ? 'محتاج نت عشان الصوت' : 'الميكروفون مش شغال دلوقتي'); };
     rec.onend = () => { stop(); input.focus(); };
     try { rec.start(); on = true; btn.classList.add('rec'); btn.setAttribute('aria-pressed', 'true'); toast('اتكلم دلوقتي…'); } catch (e) { stop(); }
   };
