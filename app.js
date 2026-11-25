@@ -508,7 +508,7 @@ function weakCard() {
 }
 
 /* ---------- الميكروفون ---------- */
-function showMicHelp() {}
+function showMicHelp() { toast('الميكروفون مش مسموح. فعّله من إعدادات الموقع في كروم.'); }
 function setupMic() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const btn = $('#micBtn'); if (!btn) return;
   if (!SR) { btn.hidden = true; return; }
