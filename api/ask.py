@@ -155,7 +155,7 @@ def gemini(model, key, system, contents):
             return http_json("https://generativelanguage.googleapis.com/v1beta/models/" + m + ":generateContent",
                              {"x-goog-api-key": key}, payload, timeout=min(25, left))
         except urllib.error.HTTPError as e:
-            if e.code in (404, 500, 502, 503, 504):
+            if e.code in (404, 429, 500, 502, 503, 504):
                 try:
                     body = e.read().decode("utf-8", "replace")[:300]
                 except Exception:
