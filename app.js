@@ -285,8 +285,8 @@ function botBubble(m, idx) {
   const setFb = v => { S.fb[m.id] = S.fb[m.id] === v ? 0 : v; save('fb'); ok.classList.toggle('on', S.fb[m.id] === 1); no.classList.toggle('on', S.fb[m.id] === -1); };
   ok.onclick = () => setFb(1); no.onclick = () => setFb(-1);
   const nt = el('button', 'chip', 'حفظ في ملاحظاتي'); nt.onclick = () => { addNote(plain(md(m.text))); };
-  const ns = el('button', 'chip p', 'ما فهمتش'); ns.type = 'button';
-  ns.onclick = () => { S.confused.unshift({ id: m.id || uid(), text: plain(md(m.text)).slice(0, 700), ts: Date.now() }); S.confused = S.confused.filter((x, i, a) => a.findIndex(y => y.id === x.id) === i).slice(0, 30); save('confused'); askChat('ما فهمتش الشرح اللي فات. اشرحلي نفس الكلام ده بشكل أبسط وبمثال: «' + plain(md(m.text)).slice(0, 400) + '»'); };
+  const ns = el('button', 'chip p', 'مفهمتش'); ns.type = 'button';
+  ns.onclick = () => { S.confused.unshift({ id: m.id || uid(), text: plain(md(m.text)).slice(0, 700), ts: Date.now() }); S.confused = S.confused.filter((x, i, a) => a.findIndex(y => y.id === x.id) === i).slice(0, 30); save('confused'); askChat('مفهمتش الشرح اللي فات. اشرحلي نفس الكلام ده بشكل أبسط وبمثال: «' + plain(md(m.text)).slice(0, 400) + '»'); };
   c.append(cp, ok, no, nt, ns); b.append(c); return b;
 }
 function renderChat() {
@@ -455,11 +455,11 @@ function renderQuizHome() {
     c2.append(b1);
     const b2 = el('button', 'link', 'مسح كل الأسئلة الغلط'); b2.onclick = () => { if (confirm('تمسح كل الأسئلة الغلط؟')) { S.wrongs = []; save('wrongs'); renderQuizHome(); } }; c2.append(b2);
   }
-  const cf = el('div', 'card'); cf.innerHTML = '<h3>الحاجات اللي ما فهمتهاش (' + S.confused.length + ')</h3>';
-  if (!S.confused.length) cf.append(el('div', 'muted', 'أي رد في الشات تدوس عليه «ما فهمتش» بيتحفظ هنا، وتقدر تتختبر فيه.'));
+  const cf = el('div', 'card'); cf.innerHTML = '<h3>الحاجات اللي مفهمتهاش (' + S.confused.length + ')</h3>';
+  if (!S.confused.length) cf.append(el('div', 'muted', 'أي رد في الشات تدوس عليه «مفهمتش» بيتحفظ هنا، وتقدر تتختبر فيه.'));
   else {
     S.confused.slice(0, 4).forEach(x => { const r = el('div', 'row'); r.append(el('span', null, esc(x.text.slice(0, 80)))); cf.append(r); });
-    const bq = el('button', 'btn', 'اختبرني في اللي ما فهمتوش'); bq.style.marginTop = '8px'; bq.onclick = () => startConfusedQuiz(); cf.append(bq);
+    const bq = el('button', 'btn', 'اختبرني في اللي مفهمتوش'); bq.style.marginTop = '8px'; bq.onclick = () => startConfusedQuiz(); cf.append(bq);
     const bc = el('button', 'link', 'مسح القائمة'); bc.onclick = () => { if (confirm('تمسح القائمة؟')) { S.confused = []; save('confused'); renderQuizHome(); } }; cf.append(bc);
   }
   const c3 = el('div', 'card'); c3.innerHTML = '<h3>مستواك</h3>'; const names = Object.keys(S.stats);
@@ -476,7 +476,7 @@ async function startQuiz(lecId, count) {
 }
 async function startConfusedQuiz() {
   const box = $('#quizBox'); box.innerHTML = ''; box.append(el('div', 'card', '<span class="typing"><i></i><i></i><i></i></span> بعمل الأسئلة…'));
-  const name = 'الحاجات اللي ما فهمتهاش';
+  const name = 'الحاجات اللي مفهمتهاش';
   try { const r = await api({ mode: 'quiz', count: 6, lecture_text: S.confused.slice(0, 12).map(x => x.text).join('\n\n'), lecture_name: name });
     quiz = { qs: r.questions.map(q => Object.assign(q, { lecture: name })), i: 0, score: 0, title: name, review: false }; runQuiz();
   } catch (e) { box.innerHTML = ''; box.append(el('div', 'card', '<div class="warn">' + esc(e.message) + '</div>')); const b = el('button', 'btn sec', 'رجوع'); b.onclick = () => { quiz = null; renderQuizHome(); }; box.append(b); }
