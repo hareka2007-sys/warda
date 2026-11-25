@@ -88,16 +88,41 @@ def fix_ar(s):
     return s
 
 
+def _repair_json(t):
+    """بيصلّح الشرطات العكسية (LaTeX) اللي الموديل بينساها تتضاعف جوه JSON."""
+    def fix(m):
+        c, nxt = m.group(1), m.group(2)
+        if c in '"\\/u' or c == "n":
+            return m.group(0)
+        if c in "bfrt" and not nxt.isalpha():
+            return m.group(0)
+        return "\\\\" + c + nxt
+    return re.sub(r"\\(.)(.?)", fix, t, flags=re.S)
+
+
+def extract_answer(text):
+    """لو الـJSON باظ خالص: نطلّع قيمة answer بس بدل ما نعرض JSON خام."""
+    m = re.search(r'"answer"\s*:\s*"', text)
+    if not m:
+        return None
+    rest = text[m.end():]
+    end = re.search(r'"\s*,\s*"source"|"\s*\}\s*$', rest)
+    body = rest[:end.start()] if end else rest
+    body = body.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+    return body.strip() or None
+
+
 def parse_model_json(text):
     t = (text or "").strip()
     t = re.sub(r"^```(?:json)?\s*|\s*```$", "", t)
-    try:
-        return json.loads(t)
-    except ValueError:
-        m = re.search(r"\{.*\}", t, re.S)
-        if m:
+    cands = [t]
+    m = re.search(r"\{.*\}", t, re.S)
+    if m:
+        cands.append(m.group(0))
+    for c in cands:
+        for x in (_repair_json(c), c):
             try:
-                return json.loads(m.group(0))
+                return json.loads(x)
             except ValueError:
                 pass
     return None
@@ -346,7 +371,7 @@ class handler(BaseHTTPRequestHandler):
             obj = parse_model_json(text)
             if not isinstance(obj, dict):
                 if mode == "chat" and text:
-                    return self._send(200, {"mode": mode, "answer": text, "source": "general"})
+                    return self._send(200, {"mode": mode, "answer": fix_ar(extract_answer(text) or text), "source": "general"})
                 return self._send(502, {"error": "معرفتش أكوّن إجابة. جرّب تاني."})
 
             if mode == "chat":
